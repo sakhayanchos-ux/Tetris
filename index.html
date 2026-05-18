@@ -268,7 +268,6 @@
     <!-- ИГРОВОЙ ЭКРАН -->
     <div class="game-screen" id="gameScreen">
         <div class="game-wrapper">
-            <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
             <div class="top-panel" id="topPanel">
                 <div class="top-stat">🏆 <b id="score">0</b></div>
                 <div class="top-divider"></div>
@@ -284,7 +283,6 @@
                 <button class="music-btn" id="musicBtn" onclick="toggleMusic()" title="Вкл/Выкл музыку">🎵</button>
                 <button class="pause-btn-top" id="pauseBtnTop" onclick="openPauseMenu()" title="Пауза">⏯</button>
             </div>
-            <!-- ИГРОВОЕ ПОЛЕ -->
             <div class="game-container" id="gameContainer">
                 <canvas id="tetrisCanvas"></canvas>
                 <div class="mobile-controls">
@@ -373,10 +371,69 @@
         let leftTimer = null;
         let rightTimer = null;
         let musicEnabled = true;
-        let bgMusic = null;
         let lastMilestone = 0;
         let isClearing = false;
 
+        // ====== ВСТРОЕННАЯ МУЗЫКА ======
+        let audioCtx = null;
+        let musicInterval = null;
+        let musicGain = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function startMusic() {
+            if (!musicEnabled || !audioCtx) return;
+            stopMusic();
+            
+            musicGain = audioCtx.createGain();
+            musicGain.gain.value = 0.03;
+            musicGain.connect(audioCtx.destination);
+            
+            const notes = [262, 294, 330, 349, 392, 440, 494, 523, 494, 440, 392, 349, 330, 294, 262, 262];
+            let noteIndex = 0;
+            
+            function playNote() {
+                if (!musicEnabled || !audioCtx) { stopMusic(); return; }
+                const osc = audioCtx.createOscillator();
+                const noteGain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.value = notes[noteIndex % notes.length];
+                noteGain.gain.value = 0.03;
+                noteGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.connect(noteGain);
+                noteGain.connect(audioCtx.destination);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.15);
+                noteIndex++;
+            }
+            
+            playNote();
+            musicInterval = setInterval(playNote, 250);
+        }
+
+        function stopMusic() {
+            if (musicInterval) { clearInterval(musicInterval); musicInterval = null; }
+        }
+
+        function toggleMusic() {
+            initAudio();
+            musicEnabled = !musicEnabled;
+            if (musicEnabled) {
+                musicBtn.classList.remove('muted');
+                musicBtn.textContent = '🎵';
+                if (gameRunning && !gamePaused && !gameOver) startMusic();
+            } else {
+                musicBtn.classList.add('muted');
+                musicBtn.textContent = '🔇';
+                stopMusic();
+            }
+        }
+
+        // ====== DOM ======
         const canvas = document.getElementById('tetrisCanvas');
         const ctx = canvas.getContext('2d');
         const nextCanvas = document.getElementById('nextCanvas');
@@ -396,24 +453,6 @@
         nextCanvas.height = 4 * MINI_BLOCK;
         canvas.width = COLS * BLOCK_SIZE;
         canvas.height = ROWS * BLOCK_SIZE;
-
-        // ====== МУЗЫКА (АВТОЗАГРУЗКА) ======
-        bgMusic = new Audio('music.mp3');
-        bgMusic.loop = true;
-        bgMusic.volume = 0.3;
-
-        function toggleMusic() {
-            musicEnabled = !musicEnabled;
-            if (musicEnabled) {
-                musicBtn.classList.remove('muted');
-                musicBtn.textContent = '🎵';
-                if (gameRunning && !gamePaused && !gameOver) bgMusic.play().catch(() => {});
-            } else {
-                musicBtn.classList.add('muted');
-                musicBtn.textContent = '🔇';
-                bgMusic.pause();
-            }
-        }
 
         // ====== LOCALSTORAGE ======
         function loadBestScore() {
@@ -553,7 +592,7 @@
         }
         function stopRight() { if (rightTimer) { clearInterval(rightTimer); rightTimer = null; } }
 
-        // ====== ФИКСАЦИЯ И ОЧИСТКА ======
+        // ====== ОЧИСТКА ======
         function lockPiece() {
             stopSoftDrop();
             const { shape, color, x, y } = currentPiece;
@@ -569,45 +608,35 @@
         function clearFullRows() {
             const fullRows = [];
             for (let row = 0; row < ROWS; row++) {
-                let full = true;
-                for (let col = 0; col < COLS; col++) {
-                    if (board[row][col] === 0) { full = false; break; }
-                }
-                if (full) fullRows.push(row);
+                if (board[row].every(cell => cell !== 0)) fullRows.push(row);
             }
-
             if (fullRows.length === 0) { spawnPiece(); return; }
 
             isClearing = true;
             const linesCleared = fullRows.length;
             let flashes = 0;
-            const maxFlashes = 4;
-
             const flashInterval = setInterval(() => {
                 flashes++;
-                if (flashes % 2 === 1) {
-                    fullRows.forEach(row => { for (let col = 0; col < COLS; col++) { if (board[row][col] !== 0) board[row][col] = -1; } });
-                } else {
-                    fullRows.forEach(row => { for (let col = 0; col < COLS; col++) { if (board[row][col] === -1) board[row][col] = 1; } });
-                }
+                fullRows.forEach(row => {
+                    for (let col = 0; col < COLS; col++) {
+                        board[row][col] = (flashes % 2 === 1) ? -1 : 1;
+                    }
+                });
                 drawBoard();
-                
-                if (flashes >= maxFlashes) {
+                if (flashes >= 4) {
                     clearInterval(flashInterval);
                     const sorted = [...fullRows].sort((a, b) => b - a);
-                    for (const row of sorted) { board.splice(row, 1); }
-                    for (let i = 0; i < linesCleared; i++) { board.unshift(new Array(COLS).fill(0)); }
+                    for (const row of sorted) board.splice(row, 1);
+                    for (let i = 0; i < linesCleared; i++) board.unshift(new Array(COLS).fill(0));
                     score += linesCleared * 20;
                     lines += linesCleared;
                     level = Math.floor(lines / 10) + 1;
                     dropInterval = Math.max(50, 800 - (level - 1) * 70);
-                    updateStats();
-                    applyTheme();
-                    checkMilestone();
+                    updateStats(); applyTheme(); checkMilestone();
                     isClearing = false;
                     spawnPiece();
                 }
-            }, 100);
+            }, 80);
         }
 
         function updateStats() {
@@ -619,24 +648,17 @@
         // ====== ОТРИСОВКА ======
         function drawBlock(context, x, y, color, blockSize) {
             const px = x * blockSize, py = y * blockSize, size = blockSize;
-            if (color === -1) {
-                context.fillStyle = '#ffffff'; context.fillRect(px, py, size, size); return;
-            }
+            if (color === -1) { context.fillStyle = '#fff'; context.fillRect(px, py, size, size); return; }
             context.fillStyle = COLORS[color]; context.fillRect(px, py, size, size);
             context.fillStyle = 'rgba(255,255,255,0.3)';
-            context.fillRect(px, py, size, Math.max(1, size * 0.12));
-            context.fillRect(px, py, Math.max(1, size * 0.12), size);
+            context.fillRect(px, py, size, 3); context.fillRect(px, py, 3, size);
             context.fillStyle = 'rgba(0,0,0,0.3)';
-            context.fillRect(px, py + size - Math.max(1, size * 0.12), size, Math.max(1, size * 0.12));
-            context.fillRect(px + size - Math.max(1, size * 0.12), py, Math.max(1, size * 0.12), size);
-            context.fillStyle = 'rgba(255,255,255,0.15)';
-            const inset = Math.max(1, size * 0.2);
-            context.fillRect(px + inset, py + inset, size - inset * 2, size - inset * 2);
+            context.fillRect(px, py + size - 3, size, 3); context.fillRect(px + size - 3, py, 3, size);
         }
 
         function drawBoard() {
             ctx.fillStyle = '#12122a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = 'rgba(180,160,220,0.08)'; ctx.lineWidth = 0.5;
+            ctx.strokeStyle = 'rgba(180,160,220,0.06)'; ctx.lineWidth = 0.5;
             for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) ctx.strokeRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
             for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (board[r][c] !== 0) drawBlock(ctx, c, r, board[r][c], BLOCK_SIZE);
             if (currentPiece && gameRunning && !isClearing) {
@@ -670,6 +692,7 @@
 
         // ====== УПРАВЛЕНИЕ ======
         function startGame() {
+            initAudio();
             stopAllTimers(); isClearing = false; createBoard();
             score = 0; lines = 0; level = 1; lastMilestone = 0; dropInterval = 800;
             gameRunning = true; gamePaused = false; gameOver = false;
@@ -677,39 +700,38 @@
             startScreen.classList.add('hidden'); gameScreen.classList.add('active');
             pauseOverlay.classList.remove('show'); gameoverOverlay.classList.remove('show');
             pauseBtnTop.textContent = '⏯'; nextPiece = null; spawnPiece();
-            if (bgMusic && musicEnabled) bgMusic.play().catch(() => {});
+            startMusic();
             if (animationId) cancelAnimationFrame(animationId);
             animationId = requestAnimationFrame(gameLoop);
         }
 
         function openPauseMenu() { 
             if (!gameRunning || gameOver) return; 
-            gamePaused = true; stopAllTimers(); 
-            if (bgMusic) bgMusic.pause(); 
+            gamePaused = true; stopAllTimers(); stopMusic();
             pauseOverlay.classList.add('show'); drawBoard(); 
         }
 
         function resumeGame() { 
             gamePaused = false; lastDropTime = performance.now(); 
             pauseOverlay.classList.remove('show'); 
-            if (bgMusic && musicEnabled) bgMusic.play().catch(() => {}); drawBoard(); 
+            startMusic(); drawBoard(); 
         }
 
         function restartGame() { 
+            stopMusic();
             pauseOverlay.classList.remove('show'); gameoverOverlay.classList.remove('show'); startGame(); 
         }
 
         function goToMenu() { 
-            stopAllTimers(); isClearing = false; gameRunning = false; gamePaused = false; gameOver = false; 
-            if (bgMusic) bgMusic.pause(); 
+            stopAllTimers(); stopMusic(); isClearing = false; 
+            gameRunning = false; gamePaused = false; gameOver = false; 
             if (animationId) cancelAnimationFrame(animationId); 
             pauseOverlay.classList.remove('show'); gameoverOverlay.classList.remove('show'); 
             gameScreen.classList.remove('active'); startScreen.classList.remove('hidden'); updateBestDisplay(); 
         }
 
         function showGameOver() {
-            gameOver = true; stopAllTimers(); isClearing = false; 
-            if (bgMusic) bgMusic.pause();
+            gameOver = true; stopAllTimers(); stopMusic(); isClearing = false;
             const nb = saveBestScore();
             document.getElementById('finalScore').textContent = score;
             document.getElementById('bestScoreText').textContent = '👑 Рекорд: ' + bestScore;
@@ -750,7 +772,6 @@
         setupMobile('btnRotate', rotatePiece, null);
         setupMobile('btnDown', startSoftDrop, stopSoftDrop);
 
-        // ====== СТАРТ ======
         loadBestScore(); createBoard(); nextPiece = randomPiece(); currentPiece = randomPiece();
         applyTheme(); drawBoard(); drawNextPiece(); updateStats();
     </script>
