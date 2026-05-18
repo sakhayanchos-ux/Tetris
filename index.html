@@ -404,7 +404,12 @@
     canvas.width = COLS * BLOCK_SIZE;
     canvas.height = ROWS * BLOCK_SIZE;
 
-    // ====== МУЗЫКА ======
+  // ====== МУЗЫКА ======
+    // Автоматическая загрузка музыки из папки с игрой
+    bgMusic = new Audio('music.mp3');  // ← название твоего файла
+    bgMusic.loop = true;               // зациклить
+    bgMusic.volume = 0.3;             // громкость (0.0 - 1.0)
+    
     function loadCustomMusic() {
         const input = document.createElement('input');
         input.type = 'file'; input.accept = 'audio/*'; input.style.display = 'none';
@@ -414,25 +419,13 @@
             if (file) {
                 const url = URL.createObjectURL(file);
                 if (bgMusic) { bgMusic.pause(); bgMusic.src = url; }
-                else { bgMusic = new Audio(music.mp3); bgMusic.loop = true; bgMusic.volume = 0.3; }
+                else { bgMusic = new Audio(url); bgMusic.loop = true; bgMusic.volume = 0.3; }
                 if (musicEnabled && gameRunning && !gamePaused && !gameOver) bgMusic.play().catch(() => {});
                 showAchievement('🎵', 'Музыка загружена!', file.name);
             }
             document.body.removeChild(input);
         });
         input.click();
-    }
-    musicBtn.addEventListener('dblclick', (e) => { e.preventDefault(); loadCustomMusic(); });
-
-    function toggleMusic() {
-        musicEnabled = !musicEnabled;
-        if (musicEnabled) {
-            musicBtn.classList.remove('muted'); musicBtn.textContent = '🎵';
-            if (bgMusic && gameRunning && !gamePaused && !gameOver) bgMusic.play().catch(() => {});
-        } else {
-            musicBtn.classList.add('muted'); musicBtn.textContent = '🔇';
-            if (bgMusic) bgMusic.pause();
-        }
     }
 
     // ====== LOCALSTORAGE ======
