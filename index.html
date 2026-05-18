@@ -414,7 +414,7 @@
             if (file) {
                 const url = URL.createObjectURL(file);
                 if (bgMusic) { bgMusic.pause(); bgMusic.src = url; }
-                else { bgMusic = new Audio(url); bgMusic.loop = true; bgMusic.volume = 0.3; }
+                else { bgMusic = new Audio(music.mp3); bgMusic.loop = true; bgMusic.volume = 0.3; }
                 if (musicEnabled && gameRunning && !gamePaused && !gameOver) bgMusic.play().catch(() => {});
                 showAchievement('🎵', 'Музыка загружена!', file.name);
             }
