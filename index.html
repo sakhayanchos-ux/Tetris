@@ -790,34 +790,30 @@
 
     // ====== УПРАВЛЕНИЕ ======
     function startGame() {
-        stopAllTimers(); 
-        isClearing = false; 
-        createBoard();
-        score = 0; lines = 0; level = 1; lastMilestone = 0; dropInterval = 800;
-        gameRunning = true; gamePaused = false; gameOver = false;
-        lastDropTime = performance.now(); 
-        updateStats(); 
-        applyTheme();
-        startScreen.classList.add('hidden'); 
-        gameScreen.classList.add('active');
-        pauseOverlay.classList.remove('show'); 
-        gameoverOverlay.classList.remove('show');
-        pauseBtnTop.textContent = '⏯'; 
-        nextPiece = null; 
-        spawnPiece();
-        if (bgMusic && musicEnabled) bgMusic.play().catch(() => {});
-        if (animationId) cancelAnimationFrame(animationId);
-        animationId = requestAnimationFrame(gameLoop);
+    stopAllTimers(); 
+    isClearing = false; 
+    createBoard();
+    score = 0; lines = 0; level = 1; lastMilestone = 0; dropInterval = 800;
+    gameRunning = true; gamePaused = false; gameOver = false;
+    lastDropTime = performance.now(); 
+    updateStats(); 
+    applyTheme();
+    startScreen.classList.add('hidden'); 
+    gameScreen.classList.add('active');
+    pauseOverlay.classList.remove('show'); 
+    gameoverOverlay.classList.remove('show');
+    pauseBtnTop.textContent = '⏯'; 
+    nextPiece = null; 
+    spawnPiece();
+    
+    // ====== ЗАПУСК МУЗЫКИ ПРИ НАЖАТИИ ИГРАТЬ ======
+    if (bgMusic && musicEnabled) {
+        bgMusic.play().catch(() => {});
     }
     
-    function openPauseMenu() { 
-        if (!gameRunning || gameOver) return; 
-        gamePaused = true; 
-        stopAllTimers(); 
-        if (bgMusic) bgMusic.pause(); 
-        pauseOverlay.classList.add('show'); 
-        drawBoard(); 
-    }
+    if (animationId) cancelAnimationFrame(animationId);
+    animationId = requestAnimationFrame(gameLoop);
+}
     
     function resumeGame() { 
         gamePaused = false; 
